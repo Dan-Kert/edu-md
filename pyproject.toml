@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "edu-md"
+version = "0.1.0"
+description = "Python toolkit for parsing and downloading CTICE and ANCE educational materials from Moldova."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+  { name = "DanKert" }
+]
+license = "MIT"
+keywords = ["education", "moldova", "scraping", "parser", "ctice", "ance", "pdf"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Education",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+  "requests>=2.32.0",
+  "beautifulsoup4>=4.13.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Dan-Kert/edu-md"
+Repository = "https://github.com/Dan-Kert/edu-md"
+Issues = "https://github.com/Dan-Kert/edu-md/issues"
+
+[project.scripts]
+edu-md = "main:main"
+
+[tool.setuptools.packages.find]
+include = ["core*", "edu_md*"]
+exclude = ["tests*", "tests.*"]
+
+[tool.setuptools.package-data]
+"*" = ["*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
