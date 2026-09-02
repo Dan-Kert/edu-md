@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "edu-md"
-version = "0.1.0"
+version = "0.1.1"
 description = "Python toolkit for parsing and downloading CTICE and ANCE educational materials from Moldova."
 readme = "README.md"
 requires-python = ">=3.9"
