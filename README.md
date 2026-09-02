@@ -95,20 +95,17 @@ for test in tests:
 ```python
 from core.eduresurse import EduResurseParser
 
-# Create parser with custom filters
-parser = EduResurseParser(
-    url="https://eduresurse.gov.md/ru/catalog",
-    education_category_id=1,
-    degree_id=2
-)
+# Create a parser for a catalog URL
+parser = EduResurseParser(url="https://eduresurse.gov.md/ru/catalog")
 
 # Fetch resources
-resources = parser.fetch()
+resources = parser.fetch_resources()
 
-# Filter by subject
+# Filter by keyword and resource type
 filtered = parser.filter_resources(
     resources,
-    subjects=["matematica"]
+    keywords=["matematica"],
+    resource_types=["pdf"]
 )
 
 for resource in filtered:
@@ -168,9 +165,9 @@ print(new_subject)  # Output: matematica
   - `parse_ance_filename(filename)` → `Optional[Dict]`
   - `discover_ance_session_urls(class_number)` → `Dict[int, List[str]]` (static)
 
-- `EduResurseParser(url, ...)` - Parse EduResurse resources
-  - `fetch()` → `List[Dict]`
-  - `filter_resources(resources, subjects, resource_types, languages)` → `List[Dict]`
+- `EduResurseParser(url, request_delay)` - Parse EduResurse resources
+  - `fetch_resources()` → `List[Dict]`
+  - `filter_resources(records, classes, keywords, languages, resource_types)` → `List[Dict]`
 
 **Utility Functions:**
 - `save_output(records, output_path, output_format)` - Save to JSON
@@ -214,7 +211,6 @@ These options work with all sources (CTICE, ANCE, EduResurse).
 | `--info` | Fetch metadata only, skip downloading files | boolean flag | false | `--info` |
 | `--download-workers` | Number of parallel download workers | integer | 1 | `--download-workers 4` |
 | `--download-delay` | Pause in seconds between downloads (rate limiting) | float | 3.0 | `--download-delay 2.5` |
-| `--download-dir` | Directory to save downloaded files | string | `./downloads` | `--download-dir /path/to/downloads` |
 | `--all` | Download all available resources across all sources or all resources from selected source | boolean flag | false | `--all` |
 | `--interactive` | Launch interactive menu for setup | boolean flag | false | `--interactive` |
 | `--insecure-ssl` | Allow fallback to unverified SSL certificates if verification fails (use with caution) | boolean flag | false | `--insecure-ssl` |
@@ -537,11 +533,11 @@ edu-md --ance --years 2024 --download-workers 1 --download-delay 5.0
 
 ### Advanced Examples
 
-#### 1. Get all Romanian math/physics content, output as JSON, save to custom directory
+#### 1. Get all Romanian math/physics content and save metadata to a custom path
 
 ```bash
 edu-md --ctice --ance --classes 9 --search "matematica,fizica" --languages ro \
-  --output ./results/combined_results.json --download-dir ./files/educational
+  --output ./results/combined_results.json
 ```
 
 #### 2. Download EduResurse resources with SSL fallback (for problematic servers)
@@ -611,7 +607,7 @@ pip install -e .
 ### Output Files
 
 - **Metadata file**: Contains resource information (always generated)
-- **Downloaded files**: Saved to `--download-dir` (default: `./downloads/`)
+- **Downloaded files**: Saved to `./downloads/` relative to the current working directory. The CLI has no directory flag; choose a different working directory when needed.
   - Filenames are sanitized (special characters replaced with underscores)
   - Maximum filename length: 180 characters
   - Organized by source when using `--all`

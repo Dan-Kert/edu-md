@@ -2,6 +2,7 @@ import argparse
 import json
 import re
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -115,7 +116,9 @@ def download_books(
     download_path.mkdir(parents=True, exist_ok=True)
     saved: List[Path] = []
     total = max(1, len(records))
-    
+    ssl_warning_lock = threading.Lock()
+    ssl_warning_emitted = False
+
     if insecure_ssl:
         print("WARNING: SSL certificate verification fallback is enabled. This reduces security.", file=sys.stderr)
 
@@ -127,28 +130,54 @@ def download_books(
         title = str(record.get("title") or filename)
         safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", filename)[:180]
         target = download_path / safe_name
+
+        def write_response(response: requests.Response) -> None:
+            try:
+                response.raise_for_status()
+                with target.open("wb") as output:
+                    if hasattr(response, "iter_content"):
+                        for chunk in response.iter_content(chunk_size=1024 * 1024):
+                            if chunk:
+                                output.write(chunk)
+                    else:
+                        output.write(response.content)
+            finally:
+                close = getattr(response, "close", None)
+                if close:
+                    close()
+
+        def get_response(verify: bool) -> requests.Response:
+            try:
+                return requests.get(url, headers=DEFAULT_HEADERS, timeout=60, verify=verify, stream=True)
+            except TypeError as exc:
+                if "stream" not in str(exc):
+                    raise
+                return requests.get(url, headers=DEFAULT_HEADERS, timeout=60, verify=verify)
+
         try:
-            response = requests.get(url, headers=DEFAULT_HEADERS, timeout=60, verify=True)
-            response.raise_for_status()
-            target.write_bytes(response.content)
+            write_response(get_response(True))
             return target
         except requests.exceptions.SSLError:
             if not insecure_ssl:
                 raise
-            print("SSL certificate check failed for the site, retrying without certificate verification", file=sys.stderr)
+            nonlocal ssl_warning_emitted
+            with ssl_warning_lock:
+                if not ssl_warning_emitted:
+                    print("SSL certificate check failed; retrying downloads from this site without certificate verification", file=sys.stderr)
+                    ssl_warning_emitted = True
             try:
-                response = requests.get(url, headers=DEFAULT_HEADERS, timeout=60, verify=False)
-                response.raise_for_status()
-                target.write_bytes(response.content)
+                write_response(get_response(False))
                 return target
             except Exception as e:
                 print(f"Error downloading {title}: {e}", file=sys.stderr)
+                target.unlink(missing_ok=True)
                 return None
         except KeyboardInterrupt:
             print("\nDownload interrupted by user.", file=sys.stderr)
             raise
         except Exception as e:
             print(f"Error downloading {title}: {e}", file=sys.stderr)
+            target.unlink(missing_ok=True)
             return None
 
     effective_workers = max(1, int(max_workers))
@@ -167,18 +196,33 @@ def download_books(
             return saved
 
         completed = 0
+        records_iter = iter(records)
         with ThreadPoolExecutor(max_workers=effective_workers) as executor:
-            futures = {executor.submit(download_record, record): record for record in records}
-            for future in as_completed(futures):
-                completed += 1
-                record = futures[future]
-                title = str(record.get("title") or record.get("filename") or "Downloading file")
-                print(f"\r{format_download_progress(int((completed / total) * 100), title)}", end="", flush=True)
-                result = future.result()
-                if result:
-                    saved.append(result)
-                if effective_delay > 0:
-                    time.sleep(effective_delay)
+            pending = {}
+            for _ in range(effective_workers):
+                try:
+                    record = next(records_iter)
+                except StopIteration:
+                    break
+                pending[executor.submit(download_record, record)] = record
+
+            while pending:
+                for future in as_completed(tuple(pending)):
+                    record = pending.pop(future)
+                    completed += 1
+                    title = str(record.get("title") or record.get("filename") or "Downloading file")
+                    print(f"\r{format_download_progress(int((completed / total) * 100), title)}", end="", flush=True)
+                    result = future.result()
+                    if result:
+                        saved.append(result)
+                    if effective_delay > 0:
+                        time.sleep(effective_delay)
+                    try:
+                        next_record = next(records_iter)
+                    except StopIteration:
+                        next_record = None
+                    if next_record is not None:
+                        pending[executor.submit(download_record, next_record)] = next_record
         complete_progress_line()
         return saved
     except KeyboardInterrupt:

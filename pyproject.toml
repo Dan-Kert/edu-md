@@ -43,6 +43,9 @@ edu-md = "main:main"
 include = ["core*", "edu_md*"]
 exclude = ["tests*", "tests.*"]
 
+[tool.setuptools]
+py-modules = ["main"]
+
 [tool.setuptools.package-data]
 "*" = ["*"]
 
